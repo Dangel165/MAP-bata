@@ -1,0 +1,105 @@
+name: MinecraftAuthPlugin
+version: '${version}'
+description: 'Secure authentication plugin for Minecraft servers'
+author: 'AuthPlugin Team'
+website: 'https://github.com/authplugin/minecraft-auth-plugin'
+main: com.authplugin.MinecraftAuthPlugin
+api-version: '1.21'
+load: STARTUP
+depend: []
+softdepend: []
+
+commands:
+  login:
+    description: 'Login with your registered password'
+    usage: '/login <password>'
+    aliases: ['l']
+    permission: auth.login
+    permission-message: 'You do not have permission to use this command'
+  
+  register:
+    description: 'Register a new account with password'
+    usage: '/register <password> <confirmPassword>'
+    aliases: ['reg']
+    permission: auth.register
+    permission-message: 'You do not have permission to use this command'
+  
+  authreload:
+    description: 'Reload the authentication plugin configuration'
+    usage: '/authreload'
+    permission: auth.admin.reload
+    permission-message: 'You do not have permission to use this command'
+  
+  authunregister:
+    description: 'Remove a player account from the database'
+    usage: '/authunregister <player>'
+    permission: auth.admin.unregister
+    permission-message: 'You do not have permission to use this command'
+  
+  authchangepass:
+    description: 'Change a player password'
+    usage: '/authchangepass <player> <newPassword>'
+    permission: auth.admin.changepass
+    permission-message: 'You do not have permission to use this command'
+  
+  authinfo:
+    description: 'Display player authentication information'
+    usage: '/authinfo <player>'
+    permission: auth.admin.info
+    permission-message: 'You do not have permission to use this command'
+  
+  authstats:
+    description: 'Display authentication plugin statistics'
+    usage: '/authstats'
+    permission: auth.admin.stats
+    permission-message: 'You do not have permission to use this command'
+  
+  authlang:
+    description: 'Change the plugin language (en/ko)'
+    usage: '/authlang <en|ko>'
+    permission: auth.admin.lang
+    permission-message: 'You do not have permission to use this command'
+
+permissions:
+  auth.login:
+    description: 'Allows player to use login command'
+    default: true
+  
+  auth.register:
+    description: 'Allows player to use register command'
+    default: true
+  
+  auth.admin:
+    description: 'Grants access to all admin commands'
+    default: op
+    children:
+      auth.admin.reload: true
+      auth.admin.unregister: true
+      auth.admin.changepass: true
+      auth.admin.info: true
+      auth.admin.stats: true
+      auth.admin.lang: true
+  
+  auth.admin.reload:
+    description: 'Allows reloading plugin configuration'
+    default: op
+  
+  auth.admin.unregister:
+    description: 'Allows removing player accounts'
+    default: op
+  
+  auth.admin.changepass:
+    description: 'Allows changing player passwords'
+    default: op
+  
+  auth.admin.info:
+    description: 'Allows viewing player authentication info'
+    default: op
+  
+  auth.admin.stats:
+    description: 'Allows viewing plugin statistics'
+    default: op
+  
+  auth.admin.lang:
+    description: 'Allows changing plugin language'
+    default: true

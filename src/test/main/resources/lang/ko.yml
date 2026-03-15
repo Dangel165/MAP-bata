@@ -1,0 +1,33 @@
+register:
+  success: "&a회원가입 완료! 자동으로 로그인되었습니다."
+  already-registered: "&c이미 등록된 계정입니다. /login 으로 로그인하세요."
+  password-too-short: "&c비밀번호가 너무 짧습니다. 최소 {min}자 이상이어야 합니다."
+  password-too-long: "&c비밀번호가 너무 깁니다. 최대 {max}자 이하여야 합니다."
+  password-mismatch: "&c비밀번호가 일치하지 않습니다."
+  usage: "&e사용법: /register <비밀번호> <비밀번호확인>"
+
+login:
+  success: "&a로그인 성공! 환영합니다, {player}님."
+  already-logged-in: "&c이미 로그인되어 있습니다."
+  not-registered: "&c등록되지 않은 계정입니다. /register 로 회원가입하세요."
+  wrong-password: "&c비밀번호가 틀렸습니다. 남은 시도: {attempts}회"
+  account-locked: "&c계정이 잠겼습니다. {minutes}분 후 다시 시도하세요."
+  ip-blocked: "&cIP가 일시적으로 차단되었습니다. {seconds}초 후 다시 시도하세요."
+  usage: "&e사용법: /login <비밀번호>"
+
+logout:
+  success: "&a로그아웃되었습니다."
+  not-logged-in: "&c로그인 상태가 아닙니다."
+
+auth:
+  not-authenticated: "&c인증이 필요합니다. /login 또는 /register 를 사용하세요."
+  timeout: "&c인증 시간이 초과되었습니다. 다시 접속해주세요."
+  timeout-warning: "&e인증까지 {seconds}초 남았습니다!"
+
+admin:
+  no-permission: "&c권한이 없습니다."
+  player-not-found: "&c플레이어를 찾을 수 없습니다: {player}"
+  reload-success: "&a설정이 성공적으로 다시 로드되었습니다."
+  unregister-success: "&a{player}의 계정이 삭제되었습니다."
+  changepass-success: "&a{player}의 비밀번호가 변경되었습니다."
+  forcelogin-success: "&a{player}를 강제 로그인했습니다."

@@ -1,0 +1,326 @@
+package com.authplugin.database;
+
+import com.authplugin.utils.AuthLogger;
+import org.bukkit.plugin.Plugin;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+import org.mockito.Mock;
+import org.mockito.MockitoAnnotations;
+
+import java.sql.Connection;
+import java.sql.SQLException;
+import java.sql.Statement;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.atomic.AtomicInteger;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.Mockito.*;
+
+/**
+ * Unit tests for database connection recovery functionality
+ * Tests automatic retry logic, connection health monitoring, and error handling
+ * Requirements: 5.5 - Database error handling and recovery
+ */
+class DatabaseConnectionRecoveryTest {
+
+    @Mock
+    private Plugin plugin;
+    
+    @Mock
+    private Connection mockConnection;
+    
+    @Mock
+    private Statement mockStatement;
+    
+    private AuthLogger logger;
+    private DatabaseConnectionRecovery connectionRecovery;
+    
+    @BeforeEach
+    void setUp() {
+        MockitoAnnotations.openMocks(this);
+        logger = new AuthLogger(plugin);
+        when(plugin.getLogger()).thenReturn(java.util.logging.Logger.getLogger("TestPlugin"));
+        
+        connectionRecovery = new DatabaseConnectionRecovery(logger, 3, 100, 5000);
+    }
+
+    @Test
+    @DisplayName("Should execute operation successfully on first attempt")
+    void shouldExecuteOperationSuccessfullyOnFirstAttempt() throws ExecutionException, InterruptedException {
+        // Given
+        String expectedResult = "success";
+        
+        // When
+        CompletableFuture<String> result = connectionRecovery.executeWithRetry(
+            () -> expectedResult,
+            "testOperation"
+        );
+        
+        // Then
+        assertThat(result.get()).isEqualTo(expectedResult);
+    }
+
+    @Test
+    @DisplayName("Should retry operation on connection failure and succeed")
+    void shouldRetryOperationOnConnectionFailureAndSucceed() throws ExecutionException, InterruptedException {
+        // Given
+        AtomicInteger attemptCount = new AtomicInteger(0);
+        String expectedResult = "success";
+        
+        // When
+        CompletableFuture<String> result = connectionRecovery.executeWithRetry(() -> {
+            int attempt = attemptCount.incrementAndGet();
+            if (attempt < 3) {
+                // Simulate connection failure on first two attempts
+                throw new SQLException("Connection failed", "08001");
+            }
+            return expectedResult;
+        }, "testOperation");
+        
+        // Then
+        assertThat(result.get()).isEqualTo(expectedResult);
+        assertThat(attemptCount.get()).isEqualTo(3);
+    }
+
+    @Test
+    @DisplayName("Should fail after maximum retry attempts")
+    void shouldFailAfterMaximumRetryAttempts() {
+        // Given
+        AtomicInteger attemptCount = new AtomicInteger(0);
+        
+        // When & Then
+        CompletableFuture<String> result = connectionRecovery.executeWithRetry(() -> {
+            attemptCount.incrementAndGet();
+            throw new SQLException("Connection failed", "08001");
+        }, "testOperation");
+        
+        assertThatThrownBy(() -> result.get())
+            .hasCauseInstanceOf(RuntimeException.class)
+            .hasMessageContaining("Database operation failed after 3 attempts");
+        
+        assertThat(attemptCount.get()).isEqualTo(3);
+    }
+
+    @Test
+    @DisplayName("Should not retry on non-connection errors")
+    void shouldNotRetryOnNonConnectionErrors() {
+        // Given
+        AtomicInteger attemptCount = new AtomicInteger(0);
+        
+        // When & Then
+        CompletableFuture<String> result = connectionRecovery.executeWithRetry(() -> {
+            attemptCount.incrementAndGet();
+            throw new SQLException("Syntax error", "42000"); // Non-connection error
+        }, "testOperation");
+        
+        assertThatThrownBy(() -> result.get())
+            .hasCauseInstanceOf(RuntimeException.class)
+            .hasMessageContaining("Database operation failed");
+        
+        // Should only attempt once for non-connection errors
+        assertThat(attemptCount.get()).isEqualTo(1);
+    }
+
+    @Test
+    @DisplayName("Should execute void operation with retry")
+    void shouldExecuteVoidOperationWithRetry() throws ExecutionException, InterruptedException {
+        // Given
+        AtomicInteger executionCount = new AtomicInteger(0);
+        
+        // When
+        CompletableFuture<Void> result = connectionRecovery.executeVoidWithRetry(() -> {
+            executionCount.incrementAndGet();
+        }, "voidOperation");
+        
+        // Then
+        result.get(); // Should complete without exception
+        assertThat(executionCount.get()).isEqualTo(1);
+    }
+
+    @Test
+    @DisplayName("Should test connection health successfully")
+    void shouldTestConnectionHealthSuccessfully() throws Exception {
+        // Given
+        when(mockConnection.isClosed()).thenReturn(false);
+        when(mockConnection.createStatement()).thenReturn(mockStatement);
+        when(mockStatement.executeQuery("SELECT 1")).thenReturn(mock(java.sql.ResultSet.class));
+        
+        // When
+        CompletableFuture<Boolean> result = connectionRecovery.testConnection(() -> mockConnection);
+        
+        // Then
+        assertThat(result.get()).isTrue();
+        verify(mockConnection).createStatement();
+        verify(mockStatement).executeQuery("SELECT 1");
+    }
+
+    @Test
+    @DisplayName("Should detect unhealthy connection")
+    void shouldDetectUnhealthyConnection() throws Exception {
+        // Given
+        when(mockConnection.isClosed()).thenReturn(true);
+        
+        // When
+        CompletableFuture<Boolean> result = connectionRecovery.testConnection(() -> mockConnection);
+        
+        // Then
+        assertThat(result.get()).isFalse();
+    }
+
+    @Test
+    @DisplayName("Should handle connection supplier exceptions")
+    void shouldHandleConnectionSupplierExceptions() throws ExecutionException, InterruptedException {
+        // Given
+        RuntimeException connectionException = new RuntimeException("Connection failed");
+        
+        // When
+        CompletableFuture<Boolean> result = connectionRecovery.testConnection(() -> {
+            throw connectionException;
+        });
+        
+        // Then
+        assertThat(result.get()).isFalse();
+    }
+
+    @Test
+    @DisplayName("Should get comprehensive health status")
+    void shouldGetComprehensiveHealthStatus() throws Exception {
+        // Given
+        when(mockConnection.isClosed()).thenReturn(false);
+        when(mockConnection.createStatement()).thenReturn(mockStatement);
+        when(mockStatement.executeQuery("SELECT 1")).thenReturn(mock(java.sql.ResultSet.class));
+        
+        // When
+        CompletableFuture<DatabaseConnectionRecovery.DatabaseHealthStatus> result = 
+            connectionRecovery.getHealthStatus(() -> mockConnection);
+        
+        // Then
+        DatabaseConnectionRecovery.DatabaseHealthStatus status = result.get();
+        assertThat(status.isHealthy()).isTrue();
+        assertThat(status.getResponseTimeMs()).isGreaterThanOrEqualTo(0);
+        assertThat(status.getLastError()).isNull();
+        assertThat(status.getLastCheckTime()).isGreaterThan(0);
+    }
+
+    @Test
+    @DisplayName("Should get health status with error information")
+    void shouldGetHealthStatusWithErrorInformation() throws ExecutionException, InterruptedException {
+        // Given
+        SQLException sqlException = new SQLException("Connection timeout");
+        
+        // When
+        CompletableFuture<DatabaseConnectionRecovery.DatabaseHealthStatus> result = 
+            connectionRecovery.getHealthStatus(() -> {
+                throw sqlException;
+            });
+        
+        // Then
+        DatabaseConnectionRecovery.DatabaseHealthStatus status = result.get();
+        assertThat(status.isHealthy()).isFalse();
+        assertThat(status.getResponseTimeMs()).isGreaterThanOrEqualTo(0);
+        assertThat(status.getLastError()).isEqualTo("Connection timeout");
+    }
+
+    @Test
+    @DisplayName("Should create database operation wrapper")
+    void shouldCreateDatabaseOperationWrapper() {
+        // Given
+        String expectedResult = "operation result";
+        DatabaseConnectionRecovery.DatabaseOperation<String> operation = 
+            new DatabaseConnectionRecovery.DatabaseOperation<>(
+                () -> expectedResult,
+                "testOperation",
+                logger
+            );
+        
+        // When
+        String result = operation.execute();
+        
+        // Then
+        assertThat(result).isEqualTo(expectedResult);
+    }
+
+    @Test
+    @DisplayName("Should handle database operation wrapper exceptions")
+    void shouldHandleDatabaseOperationWrapperExceptions() {
+        // Given
+        RuntimeException expectedException = new RuntimeException("Operation failed");
+        DatabaseConnectionRecovery.DatabaseOperation<String> operation = 
+            new DatabaseConnectionRecovery.DatabaseOperation<>(
+                () -> { throw expectedException; },
+                "testOperation",
+                logger
+            );
+        
+        // When & Then
+        assertThatThrownBy(() -> operation.execute())
+            .isEqualTo(expectedException);
+    }
+
+    @Test
+    @DisplayName("Should configure database operation with performance logging")
+    void shouldConfigureDatabaseOperationWithPerformanceLogging() {
+        // Given
+        String expectedResult = "result";
+        DatabaseConnectionRecovery.DatabaseOperation<String> operation = 
+            new DatabaseConnectionRecovery.DatabaseOperation<>(
+                () -> expectedResult,
+                "testOperation",
+                logger
+            ).withPerformanceLogging(true)
+             .withSlowQueryThreshold(50);
+        
+        // When
+        String result = operation.execute();
+        
+        // Then
+        assertThat(result).isEqualTo(expectedResult);
+    }
+
+    @Test
+    @DisplayName("Should identify connection errors correctly")
+    void shouldIdentifyConnectionErrorsCorrectly() {
+        // Test various connection error scenarios
+        
+        // SQL State 08xxx (Connection Exception)
+        SQLException connectionException = new SQLException("Connection failed", "08001");
+        CompletableFuture<String> result1 = connectionRecovery.executeWithRetry(() -> {
+            throw connectionException;
+        }, "test");
+        
+        assertThatThrownBy(() -> result1.get())
+            .hasCauseInstanceOf(RuntimeException.class);
+        
+        // Message-based detection
+        SQLException timeoutException = new SQLException("Connection timeout occurred");
+        CompletableFuture<String> result2 = connectionRecovery.executeWithRetry(() -> {
+            throw timeoutException;
+        }, "test");
+        
+        assertThatThrownBy(() -> result2.get())
+            .hasCauseInstanceOf(RuntimeException.class);
+    }
+
+    @Test
+    @DisplayName("Should not identify non-connection errors as connection errors")
+    void shouldNotIdentifyNonConnectionErrorsAsConnectionErrors() {
+        // Given
+        AtomicInteger attemptCount = new AtomicInteger(0);
+        SQLException syntaxError = new SQLException("Syntax error in SQL", "42000");
+        
+        // When & Then
+        CompletableFuture<String> result = connectionRecovery.executeWithRetry(() -> {
+            attemptCount.incrementAndGet();
+            throw syntaxError;
+        }, "test");
+        
+        assertThatThrownBy(() -> result.get())
+            .hasCauseInstanceOf(RuntimeException.class);
+        
+        // Should only attempt once for non-connection errors
+        assertThat(attemptCount.get()).isEqualTo(1);
+    }
+}

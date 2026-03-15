@@ -1,0 +1,94 @@
+plugins {
+    id 'java'
+    id 'com.github.johnrengelman.shadow' version '8.1.1'
+}
+
+group = 'com.authplugin'
+version = '1.0.0'
+description = 'Minecraft Authentication Plugin for secure player access control'
+
+java {
+    toolchain.languageVersion = JavaLanguageVersion.of(17)
+}
+
+repositories {
+    mavenCentral()
+    maven {
+        name = 'spigotmc-repo'
+        url = 'https://hub.spigotmc.org/nexus/content/repositories/snapshots/'
+    }
+    maven {
+        name = 'sonatype'
+        url = 'https://oss.sonatype.org/content/groups/public/'
+    }
+}
+
+dependencies {
+    // Spigot API for Minecraft 1.21.1
+    compileOnly 'org.spigotmc:spigot-api:1.21.1-R0.1-SNAPSHOT'
+    
+    // BCrypt for password hashing
+    implementation 'org.mindrot:jbcrypt:0.4'
+    
+    // Database drivers
+    implementation 'org.xerial:sqlite-jdbc:3.44.1.0'
+    implementation 'mysql:mysql-connector-java:8.0.33'
+    
+    // HikariCP for connection pooling
+    implementation 'com.zaxxer:HikariCP:5.1.0'
+    
+    // Configuration handling
+    implementation 'org.yaml:snakeyaml:2.2'
+    
+    // JSON processing for configuration
+    implementation 'com.google.code.gson:gson:2.10.1'
+    
+    // Logging
+    implementation 'org.slf4j:slf4j-api:2.0.9'
+    
+    // Testing dependencies
+    testImplementation 'org.junit.jupiter:junit-jupiter:5.10.1'
+    testImplementation 'org.mockito:mockito-core:5.7.0'
+    testImplementation 'org.mockito:mockito-junit-jupiter:5.7.0'
+    testImplementation 'org.spigotmc:spigot-api:1.21.1-R0.1-SNAPSHOT'
+    testImplementation 'com.h2database:h2:2.2.224'
+    testImplementation 'org.assertj:assertj-core:3.24.2'
+    
+    // Property-based testing
+    testImplementation 'net.jqwik:jqwik:1.8.2'
+}
+
+test {
+    useJUnitPlatform()
+    testLogging {
+        events "passed", "skipped", "failed"
+    }
+}
+
+shadowJar {
+    archiveClassifier.set('')
+    relocate 'org.mindrot.jbcrypt', 'com.authplugin.libs.jbcrypt'
+    relocate 'com.zaxxer.hikari', 'com.authplugin.libs.hikari'
+    relocate 'com.google.gson', 'com.authplugin.libs.gson'
+    relocate 'org.yaml.snakeyaml', 'com.authplugin.libs.snakeyaml'
+    
+    // minimize() 제거 - HikariCP와 SQLite JDBC는 reflection을 사용하므로
+    // minimize()가 필요한 클래스들을 제거해서 NoClassDefFoundError 발생
+}
+
+processResources {
+    def props = [version: version]
+    inputs.properties props
+    filteringCharset 'UTF-8'
+    filesMatching('plugin.yml') {
+        expand props
+    }
+}
+
+compileJava {
+    options.encoding = 'UTF-8'
+}
+
+compileTestJava {
+    options.encoding = 'UTF-8'
+}

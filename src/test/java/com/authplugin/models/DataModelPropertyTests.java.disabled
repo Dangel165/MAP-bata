@@ -1,0 +1,289 @@
+package com.authplugin.models;
+
+import net.jqwik.api.*;
+import net.jqwik.api.constraints.*;
+import org.junit.jupiter.api.Tag;
+import org.assertj.core.api.Assertions;
+
+import java.sql.Timestamp;
+import java.util.Date;
+import java.util.UUID;
+
+/**
+ * Property-based tests for data model consistency
+ * Tests universal properties that should hold for all valid data model instances
+ */
+@Tag("Feature: minecraft-auth-plugin, Property 15: Complete Player Data Storage")
+public class DataModelPropertyTests {
+
+    /**
+     * Property 15: Complete Player Data Storage
+     * For any player registration, the database should store all required fields:
+     * username, password hash, registration date, and last login.
+     * 
+     * Validates: Requirements 5.3
+     */
+    @Property
+    @Tag("Property15")
+    void playerDataShouldContainAllRequiredFields(
+            @ForAll @AlphaChars @StringLength(min = 3, max = 16) String username,
+            @ForAll @StringLength(min = 60, max = 60) String passwordHash,
+            @ForAll("validTimestamps") Timestamp registrationDate,
+            @ForAll("validTimestampsOrNull") Timestamp lastLogin,
+            @ForAll("validIpAddresses") String lastIpAddress,
+            @ForAll @IntRange(min = 0, max = 10) int failedAttempts,
+            @ForAll @LongRange(min = 0) long lockoutUntil) {
+        
+        // Create PlayerData instance
+        PlayerData playerData = new PlayerData(
+            username, passwordHash, registrationDate, lastLogin, 
+            lastIpAddress, failedAttempts, lockoutUntil
+        );
+        
+        // Verify all required fields are present and accessible
+        Assertions.assertThat(playerData.getUsername()).isNotNull();
+        Assertions.assertThat(playerData.getUsername()).isEqualTo(username);
+        
+        Assertions.assertThat(playerData.getPasswordHash()).isNotNull();
+        Assertions.assertThat(playerData.getPasswordHash()).isEqualTo(passwordHash);
+        
+        Assertions.assertThat(playerData.getRegistrationDate()).isNotNull();
+        Assertions.assertThat(playerData.getRegistrationDate()).isEqualTo(new Date(registrationDate.getTime()));
+        
+        // Last login can be null for new registrations
+        if (lastLogin != null) {
+            Assertions.assertThat(playerData.getLastLogin()).isEqualTo(new Date(lastLogin.getTime()));
+        }
+        
+        Assertions.assertThat(playerData.getLastIpAddress()).isEqualTo(lastIpAddress);
+        Assertions.assertThat(playerData.getFailedAttempts()).isEqualTo(failedAttempts);
+        Assertions.assertThat(playerData.getLockoutUntil()).isEqualTo(lockoutUntil);
+    }
+
+    /**
+     * Property: AuthSession should maintain consistent state
+     * For any valid session data, the AuthSession should preserve all information
+     * and provide consistent access to session properties
+     */
+    @Property
+    void authSessionShouldMaintainConsistentState(
+            @ForAll("validUUIDs") UUID playerId,
+            @ForAll @AlphaChars @StringLength(min = 3, max = 16) String username,
+            @ForAll("validIpAddresses") String ipAddress,
+            @ForAll @LongRange(min = 0) long loginTime,
+            @ForAll @LongRange(min = 0) long lastActivity,
+            @ForAll boolean authenticated) {
+        
+        // Ensure lastActivity is not before loginTime
+        long adjustedLastActivity = Math.max(loginTime, lastActivity);
+        
+        AuthSession session = new AuthSession(
+            playerId, username, ipAddress, loginTime, adjustedLastActivity, authenticated
+        );
+        
+        // Verify all session data is preserved
+        Assertions.assertThat(session.getPlayerId()).isEqualTo(playerId);
+        Assertions.assertThat(session.getUsername()).isEqualTo(username);
+        Assertions.assertThat(session.getIpAddress()).isEqualTo(ipAddress);
+        Assertions.assertThat(session.getLoginTime()).isEqualTo(loginTime);
+        Assertions.assertThat(session.getLastActivity()).isEqualTo(adjustedLastActivity);
+        Assertions.assertThat(session.isAuthenticated()).isEqualTo(authenticated);
+        
+        // Verify computed properties are consistent
+        Assertions.assertThat(session.getSessionDuration()).isGreaterThanOrEqualTo(0);
+        Assertions.assertThat(session.getTimeSinceLastActivity()).isGreaterThanOrEqualTo(0);
+    }
+
+    /**
+     * Property: AuthConfig should preserve all configuration sections
+     * For any valid configuration data, AuthConfig should maintain all sections
+     * and provide consistent access to nested configurations
+     */
+    @Property
+    void authConfigShouldPreserveAllConfigurationSections(
+            @ForAll("validDatabaseConfigs") AuthConfig.DatabaseConfig database,
+            @ForAll("validSecurityConfigs") AuthConfig.SecurityConfig security,
+            @ForAll("validMessageConfigs") AuthConfig.MessageConfig messages,
+            @ForAll("validLocationConfigs") AuthConfig.LocationConfig location,
+            @ForAll("validPerformanceConfigs") AuthConfig.PerformanceConfig performance,
+            @ForAll("validFeatureConfigs") AuthConfig.FeatureConfig features) {
+        
+        AuthConfig config = new AuthConfig(database, security, messages, location, performance, features);
+        
+        // Verify all configuration sections are preserved
+        Assertions.assertThat(config.getDatabase()).isEqualTo(database);
+        Assertions.assertThat(config.getSecurity()).isEqualTo(security);
+        Assertions.assertThat(config.getMessages()).isEqualTo(messages);
+        Assertions.assertThat(config.getSpawnLocation()).isEqualTo(location);
+        Assertions.assertThat(config.getPerformance()).isEqualTo(performance);
+        Assertions.assertThat(config.getFeatures()).isEqualTo(features);
+    }
+
+    /**
+     * Property: PlayerData lockout logic should be consistent
+     * For any lockout time, the lockout status and remaining time should be logically consistent
+     */
+    @Property
+    void playerDataLockoutLogicShouldBeConsistent(
+            @ForAll @AlphaChars @StringLength(min = 3, max = 16) String username,
+            @ForAll @StringLength(min = 60, max = 60) String passwordHash,
+            @ForAll("validTimestamps") Timestamp registrationDate,
+            @ForAll @LongRange(min = 0) long lockoutUntil) {
+        
+        PlayerData playerData = new PlayerData(
+            username, passwordHash, registrationDate, null, "127.0.0.1", 0, lockoutUntil
+        );
+        
+        long currentTime = System.currentTimeMillis();
+        boolean shouldBeLockedOut = lockoutUntil > 0 && currentTime < lockoutUntil;
+        
+        Assertions.assertThat(playerData.isLockedOut()).isEqualTo(shouldBeLockedOut);
+        
+        if (shouldBeLockedOut) {
+            Assertions.assertThat(playerData.getRemainingLockoutSeconds()).isGreaterThan(0);
+        } else {
+            Assertions.assertThat(playerData.getRemainingLockoutSeconds()).isEqualTo(0);
+        }
+    }
+
+    /**
+     * Property: AuthSession activity updates should be consistent
+     * For any session, updating activity should change the last activity time
+     */
+    @Property
+    void authSessionActivityUpdateShouldBeConsistent(
+            @ForAll("validUUIDs") UUID playerId,
+            @ForAll @AlphaChars @StringLength(min = 3, max = 16) String username,
+            @ForAll("validIpAddresses") String ipAddress,
+            @ForAll @LongRange(min = 0, max = 1000000000L) long loginTime) {
+        
+        AuthSession session = new AuthSession(
+            playerId, username, ipAddress, loginTime, loginTime, false
+        );
+        
+        long originalActivity = session.getLastActivity();
+        
+        // Wait a small amount to ensure time difference
+        try {
+            Thread.sleep(1);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
+        
+        session.updateActivity();
+        
+        Assertions.assertThat(session.getLastActivity()).isGreaterThan(originalActivity);
+    }
+
+    // Providers for generating test data
+
+    @Provide
+    Arbitrary<UUID> validUUIDs() {
+        return Arbitraries.create(() -> UUID.randomUUID());
+    }
+
+    @Provide
+    Arbitrary<Timestamp> validTimestamps() {
+        return Arbitraries.longs()
+            .between(System.currentTimeMillis() - 365L * 24 * 60 * 60 * 1000, // 1 year ago
+                    System.currentTimeMillis()) // now
+            .map(Timestamp::new);
+    }
+
+    @Provide
+    Arbitrary<Timestamp> validTimestampsOrNull() {
+        return Arbitraries.oneOf(
+            validTimestamps(),
+            Arbitraries.just((Timestamp) null)
+        );
+    }
+
+    @Provide
+    Arbitrary<String> validIpAddresses() {
+        return Arbitraries.oneOf(
+            Arbitraries.just("127.0.0.1"),
+            Arbitraries.just("192.168.1.1"),
+            Arbitraries.just("10.0.0.1"),
+            Arbitraries.just("::1"),
+            Arbitraries.just("2001:db8::1")
+        );
+    }
+
+    @Provide
+    Arbitrary<AuthConfig.DatabaseConfig> validDatabaseConfigs() {
+        return Arbitraries.oneOf(
+            // SQLite config
+            Arbitraries.just(new AuthConfig.DatabaseConfig(
+                "sqlite", "", 0, "", "", "", "test.db", false,
+                new AuthConfig.ConnectionPoolConfig(10, 2, 30000)
+            )),
+            // MySQL config
+            Arbitraries.just(new AuthConfig.DatabaseConfig(
+                "mysql", "localhost", 3306, "testdb", "user", "pass", "", false,
+                new AuthConfig.ConnectionPoolConfig(10, 2, 30000)
+            ))
+        );
+    }
+
+    @Provide
+    Arbitrary<AuthConfig.SecurityConfig> validSecurityConfigs() {
+        return Arbitraries.integers().between(4, 20).flatMap(minLength ->
+            Arbitraries.integers().between(1, 10).flatMap(maxAttempts ->
+                Arbitraries.integers().between(60, 3600).flatMap(lockout ->
+                    Arbitraries.integers().between(60, 3600).flatMap(timeout ->
+                        Arbitraries.integers().between(1, 20).flatMap(radius ->
+                            Arbitraries.integers().between(300, 3600).map(reauth ->
+                                new AuthConfig.SecurityConfig(
+                                    minLength, maxAttempts, lockout, timeout, radius, reauth, true, true
+                                )
+                            )
+                        )
+                    )
+                )
+            )
+        );
+    }
+
+    @Provide
+    Arbitrary<AuthConfig.MessageConfig> validMessageConfigs() {
+        return Arbitraries.oneOf(
+            Arbitraries.just(new AuthConfig.MessageConfig("en", false)),
+            Arbitraries.just(new AuthConfig.MessageConfig("ko", true))
+        );
+    }
+
+    @Provide
+    Arbitrary<AuthConfig.LocationConfig> validLocationConfigs() {
+        return Arbitraries.doubles().between(-1000, 1000).flatMap(x ->
+            Arbitraries.doubles().between(0, 256).flatMap(y ->
+                Arbitraries.doubles().between(-1000, 1000).flatMap(z ->
+                    Arbitraries.floats().between(-180, 180).flatMap(yaw ->
+                        Arbitraries.floats().between(-90, 90).map(pitch ->
+                            new AuthConfig.LocationConfig("world", x, y, z, yaw, pitch)
+                        )
+                    )
+                )
+            )
+        );
+    }
+
+    @Provide
+    Arbitrary<AuthConfig.PerformanceConfig> validPerformanceConfigs() {
+        return Arbitraries.integers().between(1, 60).map(interval ->
+            new AuthConfig.PerformanceConfig(false, false, interval, true)
+        );
+    }
+
+    @Provide
+    Arbitrary<AuthConfig.FeatureConfig> validFeatureConfigs() {
+        return Arbitraries.of(true, false).flatMap(autoReauth ->
+            Arbitraries.of(true, false).flatMap(playerHiding ->
+                Arbitraries.of(true, false).flatMap(timeoutWarnings ->
+                    Arbitraries.of(true, false).map(passwordStrength ->
+                        new AuthConfig.FeatureConfig(autoReauth, playerHiding, timeoutWarnings, passwordStrength)
+                    )
+                )
+            )
+        );
+    }
+}

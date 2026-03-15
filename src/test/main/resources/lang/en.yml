@@ -1,0 +1,33 @@
+register:
+  success: "&aRegistration complete! You have been automatically logged in."
+  already-registered: "&cYou already have an account. Use /login to log in."
+  password-too-short: "&cPassword too short. Minimum {min} characters required."
+  password-too-long: "&cPassword too long. Maximum {max} characters allowed."
+  password-mismatch: "&cPasswords do not match."
+  usage: "&eUsage: /register <password> <confirm-password>"
+
+login:
+  success: "&aLogin successful! Welcome, {player}."
+  already-logged-in: "&cYou are already logged in."
+  not-registered: "&cNo account found. Use /register to create one."
+  wrong-password: "&cWrong password. Remaining attempts: {attempts}"
+  account-locked: "&cAccount locked. Try again in {minutes} minutes."
+  ip-blocked: "&cYour IP is temporarily blocked. Try again in {seconds} seconds."
+  usage: "&eUsage: /login <password>"
+
+logout:
+  success: "&aYou have been logged out."
+  not-logged-in: "&cYou are not logged in."
+
+auth:
+  not-authenticated: "&cAuthentication required. Use /login or /register."
+  timeout: "&cAuthentication timed out. Please reconnect."
+  timeout-warning: "&e{seconds} seconds remaining to authenticate!"
+
+admin:
+  no-permission: "&cYou do not have permission to use this command."
+  player-not-found: "&cPlayer not found: {player}"
+  reload-success: "&aConfiguration reloaded successfully."
+  unregister-success: "&aAccount deleted for {player}."
+  changepass-success: "&aPassword changed for {player}."
+  forcelogin-success: "&aForce-logged in {player}."

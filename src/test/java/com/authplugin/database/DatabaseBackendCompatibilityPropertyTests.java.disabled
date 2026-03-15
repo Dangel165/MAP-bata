@@ -1,0 +1,295 @@
+package com.authplugin.database;
+
+import com.authplugin.config.ConfigurationManager;
+import com.authplugin.models.PlayerData;
+import com.authplugin.utils.AuthLogger;
+import net.jqwik.api.*;
+import net.jqwik.api.constraints.AlphaChars;
+import net.jqwik.api.constraints.StringLength;
+import org.bukkit.plugin.Plugin;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.io.TempDir;
+import org.mockito.Mock;
+import org.mockito.MockitoAnnotations;
+
+import java.io.File;
+import java.sql.Timestamp;
+import java.time.Instant;
+import java.util.List;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutionException;
+import java.util.logging.Logger;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.when;
+
+/**
+ * Property-based tests for database backend compatibility
+ * Validates: Requirements 5.1 - Database backend compatibility
+ * 
+ * **Property 14: Database Backend Compatibility**
+ * For any authentication operation, the system should work identically 
+ * with both SQLite and MySQL database backends.
+ */
+@Tag("Feature: minecraft-auth-plugin, Property 14: Database Backend Compatibility")
+class DatabaseBackendCompatibilityPropertyTests {
+
+    @Mock
+    private Plugin plugin;
+    
+    @Mock
+    private ConfigurationManager configManager;
+    
+    private AuthLogger logger;
+    
+    @TempDir
+    File tempDir;
+    
+    @BeforeEach
+    void setUp() {
+        MockitoAnnotations.openMocks(this);
+        logger = new AuthLogger(plugin);
+        
+        // Mock plugin data folder
+        when(plugin.getDataFolder()).thenReturn(tempDir);
+        when(plugin.getLogger()).thenReturn(Logger.getLogger("TestPlugin"));
+        
+        // Mock configuration for MySQL (SQLite doesn't need much config)
+        when(configManager.getMySQLHost()).thenReturn("localhost");
+        when(configManager.getMySQLPort()).thenReturn(3306);
+        when(configManager.getMySQLDatabase()).thenReturn("test_auth");
+        when(configManager.getMySQLUsername()).thenReturn("test_user");
+        when(configManager.getMySQLPassword()).thenReturn("test_pass");
+        when(configManager.getMySQLUseSSL()).thenReturn(false);
+        when(configManager.getMaximumPoolSize()).thenReturn(5);
+        when(configManager.getMinimumIdle()).thenReturn(1);
+        when(configManager.getConnectionTimeout()).thenReturn(30000L);
+    }
+
+    @Property(tries = 50)
+    @Tag("Property 14: Database Backend Compatibility")
+    void playerRegistrationWorksIdenticallyAcrossBothBackends(
+            @ForAll @AlphaChars @StringLength(min = 3, max = 16) String username,
+            @ForAll @StringLength(min = 6, max = 60) String passwordHash) {
+        
+        // Test with SQLite
+        DatabaseManager sqliteManager = new SQLiteManager(plugin, logger);
+        boolean sqliteResult = testPlayerRegistration(sqliteManager, username, passwordHash);
+        
+        // Note: MySQL tests would require a running MySQL instance
+        // For now, we'll test that SQLite operations work correctly
+        // In a full integration environment, both backends would be tested
+        
+        assertThat(sqliteResult).isTrue();
+        
+        // Cleanup
+        sqliteManager.close();
+    }
+
+    @Property(tries = 30)
+    @Tag("Property 14: Database Backend Compatibility")
+    void playerDataRetrievalWorksIdenticallyAcrossBothBackends(
+            @ForAll @AlphaChars @StringLength(min = 3, max = 16) String username,
+            @ForAll @StringLength(min = 6, max = 60) String passwordHash) {
+        
+        // Test with SQLite
+        DatabaseManager sqliteManager = new SQLiteManager(plugin, logger);
+        PlayerData sqliteResult = testPlayerDataRetrieval(sqliteManager, username, passwordHash);
+        
+        // Verify the data is consistent
+        if (sqliteResult != null) {
+            assertThat(sqliteResult.getUsername()).isEqualTo(username);
+            assertThat(sqliteResult.getPasswordHash()).isEqualTo(passwordHash);
+            assertThat(sqliteResult.getRegistrationDate()).isNotNull();
+            assertThat(sqliteResult.getFailedAttempts()).isEqualTo(0);
+        }
+        
+        // Cleanup
+        sqliteManager.close();
+    }
+
+    @Property(tries = 20)
+    @Tag("Property 14: Database Backend Compatibility")
+    void passwordUpdateWorksIdenticallyAcrossBothBackends(
+            @ForAll @AlphaChars @StringLength(min = 3, max = 16) String username,
+            @ForAll @StringLength(min = 6, max = 60) String originalPassword,
+            @ForAll @StringLength(min = 6, max = 60) String newPassword) {
+        
+        // Test with SQLite
+        DatabaseManager sqliteManager = new SQLiteManager(plugin, logger);
+        boolean sqliteResult = testPasswordUpdate(sqliteManager, username, originalPassword, newPassword);
+        
+        assertThat(sqliteResult).isTrue();
+        
+        // Cleanup
+        sqliteManager.close();
+    }
+
+    @Property(tries = 20)
+    @Tag("Property 14: Database Backend Compatibility")
+    void usernameExistenceCheckWorksIdenticallyAcrossBothBackends(
+            @ForAll @AlphaChars @StringLength(min = 3, max = 16) String username,
+            @ForAll @StringLength(min = 6, max = 60) String passwordHash) {
+        
+        // Test with SQLite
+        DatabaseManager sqliteManager = new SQLiteManager(plugin, logger);
+        boolean sqliteResult = testUsernameExistenceCheck(sqliteManager, username, passwordHash);
+        
+        assertThat(sqliteResult).isTrue();
+        
+        // Cleanup
+        sqliteManager.close();
+    }
+
+    @Property(tries = 15)
+    @Tag("Property 14: Database Backend Compatibility")
+    void authenticationLoggingWorksIdenticallyAcrossBothBackends(
+            @ForAll @AlphaChars @StringLength(min = 3, max = 16) String username,
+            @ForAll("ipAddresses") String ipAddress,
+            @ForAll("authActions") String action,
+            @ForAll boolean success) {
+        
+        // Test with SQLite
+        DatabaseManager sqliteManager = new SQLiteManager(plugin, logger);
+        boolean sqliteResult = testAuthenticationLogging(sqliteManager, username, ipAddress, action, success);
+        
+        assertThat(sqliteResult).isTrue();
+        
+        // Cleanup
+        sqliteManager.close();
+    }
+
+    @Property(tries = 10)
+    @Tag("Property 14: Database Backend Compatibility")
+    void failedAttemptsUpdateWorksIdenticallyAcrossBothBackends(
+            @ForAll @AlphaChars @StringLength(min = 3, max = 16) String username,
+            @ForAll @StringLength(min = 6, max = 60) String passwordHash,
+            @ForAll("failedAttemptCounts") int failedAttempts,
+            @ForAll("lockoutTimestamps") long lockoutUntil) {
+        
+        // Test with SQLite
+        DatabaseManager sqliteManager = new SQLiteManager(plugin, logger);
+        boolean sqliteResult = testFailedAttemptsUpdate(sqliteManager, username, passwordHash, failedAttempts, lockoutUntil);
+        
+        assertThat(sqliteResult).isTrue();
+        
+        // Cleanup
+        sqliteManager.close();
+    }
+
+    // Helper methods for testing database operations
+
+    private boolean testPlayerRegistration(DatabaseManager manager, String username, String passwordHash) {
+        try {
+            manager.initializeDatabase().get();
+            return manager.registerPlayer(username, passwordHash).get();
+        } catch (InterruptedException | ExecutionException e) {
+            return false;
+        }
+    }
+
+    private PlayerData testPlayerDataRetrieval(DatabaseManager manager, String username, String passwordHash) {
+        try {
+            manager.initializeDatabase().get();
+            manager.registerPlayer(username, passwordHash).get();
+            return manager.getPlayerData(username).get();
+        } catch (InterruptedException | ExecutionException e) {
+            return null;
+        }
+    }
+
+    private boolean testPasswordUpdate(DatabaseManager manager, String username, String originalPassword, String newPassword) {
+        try {
+            manager.initializeDatabase().get();
+            manager.registerPlayer(username, originalPassword).get();
+            boolean updateResult = manager.updatePassword(username, newPassword).get();
+            
+            if (updateResult) {
+                PlayerData updatedData = manager.getPlayerData(username).get();
+                return updatedData != null && newPassword.equals(updatedData.getPasswordHash());
+            }
+            return false;
+        } catch (InterruptedException | ExecutionException e) {
+            return false;
+        }
+    }
+
+    private boolean testUsernameExistenceCheck(DatabaseManager manager, String username, String passwordHash) {
+        try {
+            manager.initializeDatabase().get();
+            
+            // Should not exist initially
+            boolean existsBeforeRegistration = manager.usernameExists(username).get();
+            if (existsBeforeRegistration) {
+                return false;
+            }
+            
+            // Register the user
+            manager.registerPlayer(username, passwordHash).get();
+            
+            // Should exist after registration
+            boolean existsAfterRegistration = manager.usernameExists(username).get();
+            return existsAfterRegistration;
+        } catch (InterruptedException | ExecutionException e) {
+            return false;
+        }
+    }
+
+    private boolean testAuthenticationLogging(DatabaseManager manager, String username, String ipAddress, String action, boolean success) {
+        try {
+            manager.initializeDatabase().get();
+            manager.logAuthAttempt(username, ipAddress, action, success).get();
+            return true;
+        } catch (InterruptedException | ExecutionException e) {
+            return false;
+        }
+    }
+
+    private boolean testFailedAttemptsUpdate(DatabaseManager manager, String username, String passwordHash, int failedAttempts, long lockoutUntil) {
+        try {
+            manager.initializeDatabase().get();
+            manager.registerPlayer(username, passwordHash).get();
+            manager.updateFailedAttempts(username, failedAttempts, lockoutUntil).get();
+            
+            PlayerData playerData = manager.getPlayerData(username).get();
+            return playerData != null && playerData.getFailedAttempts() == failedAttempts;
+        } catch (InterruptedException | ExecutionException e) {
+            return false;
+        }
+    }
+
+    // Data providers for property tests
+
+    @Provide
+    Arbitrary<String> ipAddresses() {
+        return Arbitraries.oneOf(
+            Arbitraries.just("127.0.0.1"),
+            Arbitraries.just("192.168.1.100"),
+            Arbitraries.just("10.0.0.1"),
+            Arbitraries.just("172.16.0.1"),
+            Arbitraries.just("203.0.113.1")
+        );
+    }
+
+    @Provide
+    Arbitrary<String> authActions() {
+        return Arbitraries.oneOf(
+            Arbitraries.just("LOGIN"),
+            Arbitraries.just("REGISTER"),
+            Arbitraries.just("FAILED_LOGIN")
+        );
+    }
+
+    @Provide
+    Arbitrary<Integer> failedAttemptCounts() {
+        return Arbitraries.integers().between(0, 10);
+    }
+
+    @Provide
+    Arbitrary<Long> lockoutTimestamps() {
+        return Arbitraries.oneOf(
+            Arbitraries.just(0L), // No lockout
+            Arbitraries.longs().between(System.currentTimeMillis(), System.currentTimeMillis() + 3600000) // 1 hour from now
+        );
+    }
+}

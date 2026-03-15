@@ -1,0 +1,97 @@
+# Minecraft Authentication Plugin Configuration
+# This file contains all settings for the authentication system
+
+# Database Configuration
+database:
+  # Database type: "sqlite" or "mysql"
+  type: "sqlite"
+  
+  # SQLite settings (used when type is "sqlite")
+  sqlite:
+    filename: "authdata.db"
+  
+  # MySQL settings (used when type is "mysql")
+  mysql:
+    host: "localhost"
+    port: 3306
+    database: "minecraft_auth"
+    username: "auth_user"
+    password: "change_this_password"
+    useSSL: false
+  
+  # Connection pool settings
+  connection-pool:
+    maximum-pool-size: 10
+    minimum-idle: 2
+    connection-timeout: 30000
+
+# Security Configuration
+security:
+  # Minimum password length for registration
+  min-password-length: 6
+  
+  # Maximum failed login attempts before lockout
+  max-failed-attempts: 3
+  
+  # Lockout duration in seconds (300 = 5 minutes)
+  lockout-duration-seconds: 300
+  
+  # Authentication timeout in seconds (300 = 5 minutes)
+  auth-timeout-seconds: 300
+  
+  # Movement radius for unauthenticated players (blocks)
+  movement-radius: 5
+  
+  # Auto re-authentication time window in seconds (600 = 10 minutes)
+  auto-reauth-time-seconds: 600
+  
+  # Enable IP-based rate limiting
+  enable-ip-rate-limiting: true
+  
+  # Enable username similarity checking
+  enable-username-similarity-check: true
+
+# Spawn Location Configuration
+spawn:
+  world: "world"
+  x: 0.0
+  y: 64.0
+  z: 0.0
+  yaw: 0.0
+  pitch: 0.0
+
+# Message Configuration
+messages:
+  # Language: "en" for English, "ko" for Korean
+  language: "ko"
+  
+  # Enable custom message templates
+  enable-custom-messages: false
+
+# Performance Configuration
+performance:
+  # Enable debug mode for detailed logging
+  enable-debug-mode: false
+  
+  # Enable performance logging
+  enable-performance-logging: false
+  
+  # Session cleanup interval in minutes
+  session-cleanup-interval-minutes: 5
+  
+  # Enable daily database backups
+  database-backup-enabled: true
+
+# Feature Configuration
+features:
+  # Enable automatic re-authentication for returning players
+  enable-auto-reauth: true
+  
+  # Hide unauthenticated players from authenticated players
+  enable-player-hiding: true
+  
+  # Show timeout warnings to players
+  enable-timeout-warnings: true
+  
+  # Show password strength indicators during registration
+  enable-password-strength-indicator: true
