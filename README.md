@@ -38,14 +38,7 @@ security:
 
 messages:
   language: ko          # ko 또는 en
-```
-
-## 빌드
-
-```bash
-./gradlew shadowJar      # 플러그인 JAR 생성
-./gradlew test           # 테스트 실행
-```
+```
 
 ## 권한
 
