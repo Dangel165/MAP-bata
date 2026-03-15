@@ -1,6 +1,6 @@
 # Minecraft Auth Plugin
 
-Minecraft 1.21.1 서버를 위한 보안 인증 플러그인입니다.  
+Minecraft 1.21.11 서버를 위한 보안 인증 플러그인입니다.  
 bcrypt 비밀번호 해싱, 세션 관리, SQLite/MySQL 지원, 관리자 명령어를 제공합니다.
 
 ## 기능
